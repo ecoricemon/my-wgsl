@@ -1,0 +1,32 @@
+[package]
+name = "my-wgsl"
+version = "0.1.4"
+edition = "2024"
+rust-version = "1.85"
+description = "A WGSL compatibility check library"
+documentation = "https://docs.rs/my-wgsl"
+readme = "README.md" 
+repository = "https://github.com/ecoricemon/my-wgsl"
+license = "Apache-2.0 OR MIT"
+keywords = ["wgsl"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+my-wgsl-macros = { version = "0.1.4", path = "../my-wgsl-macros" }
+my-wgsl-syn = { version = "0.1.0", path = "../my-wgsl-syn" }
+wgsl-builtin = { version = "0.1.1", path = "../wgsl-builtin" }
+const_format = { workspace = true }
+const-str = { workspace = true }
+paste = { workspace = true }
+
+[dev-dependencies] 
+pretty_assertions = { version = "1.4.1" }
+wgpu = { version = "27.0.1" }
+futures-lite = { version = "2.6.1" }
+
+[[example]]
+name = "var"
+path = "examples/var.rs"
+crate-type = ["bin"]
