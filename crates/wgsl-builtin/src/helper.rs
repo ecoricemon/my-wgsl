@@ -101,13 +101,13 @@ pub trait ConstructorHelper {
     /// Returns pairs of Rust constructor & WGSL constructor.
     ///
     /// e.g. Vec2i::splat & vec2i
-    fn constructors() -> impl Iterator<Item = (&'static str, &'static str)>;
+    fn constructors() -> Vec<(&'static str, &'static str)>;
 }
 
 macro_rules! impl_constructor_helper_for_vec {
     ($ty:ty, $wgsl_ty:ident) => {
         impl ConstructorHelper for $ty {
-            fn constructors() -> impl Iterator<Item = (&'static str, &'static str)> {
+            fn constructors() -> Vec<(&'static str, &'static str)> {
                 debug_assert_eq!(<$ty>::wgsl_ident(), stringify!($wgsl_ty));
 
                 [
@@ -118,7 +118,7 @@ macro_rules! impl_constructor_helper_for_vec {
                         concat!(stringify!($wgsl_ty), "()"),
                     ),
                 ]
-                .into_iter()
+                .into()
             }
         }
     };
@@ -127,21 +127,21 @@ macro_rules! impl_constructor_helper_for_vec {
 macro_rules! impl_constructor_helper_for_mat {
     ($ty:ty, $wgsl_ty:ident $(, $extra:expr)* ) => {
         impl ConstructorHelper for $ty {
-            fn constructors() -> impl Iterator<Item = (&'static str, &'static str)> {
+            fn constructors() -> Vec<(&'static str, &'static str)> {
                 debug_assert_eq!(<$ty>::wgsl_ident(), stringify!($wgsl_ty));
 
                 [
                     (concat!(stringify!($ty), "::new"), stringify!($wgsl_ty)),
                     $($extra),*
-                ].into_iter()
+                ].into()
             }
         }
     };
 }
 
 impl ConstructorHelper for Bool {
-    fn constructors() -> impl Iterator<Item = (&'static str, &'static str)> {
-        [].into_iter()
+    fn constructors() -> Vec<(&'static str, &'static str)> {
+        [].into()
     }
 }
 

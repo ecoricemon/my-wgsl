@@ -2,9 +2,9 @@ use super::{path::*, util::*};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::ToTokens;
 use syn::{
-    Attribute, BinOp, Error, Expr, ExprArray, ExprBinary, ExprCall, ExprLit, ExprPath, Field,
-    Ident, Item, ItemConst, ItemStruct, Meta, Path, Result, Type, TypeArray, TypePath, TypeSlice,
-    spanned::Spanned,
+    spanned::Spanned, Attribute, BinOp, Error, Expr, ExprArray, ExprBinary, ExprCall, ExprLit,
+    ExprPath, Field, Ident, Item, ItemConst, ItemStruct, Meta, Path, Result, Type, TypeArray,
+    TypePath, TypeSlice,
 };
 
 pub(crate) trait RuntimeWgslToken {

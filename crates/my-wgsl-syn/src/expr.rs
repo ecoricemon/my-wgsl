@@ -3,8 +3,8 @@ use proc_macro2::{Delimiter, Group, Punct, Spacing, TokenStream as TokenStream2}
 use quote::{ToTokens, TokenStreamExt};
 use std::ops::{Deref, DerefMut};
 use syn::{
-    BinOp, Expr, ExprArray, ExprBinary, ExprCall, ExprLit, ExprPath, Ident, Lit, Result, Token,
-    punctuated::Punctuated, token,
+    punctuated::Punctuated, token, BinOp, Expr, ExprArray, ExprBinary, ExprCall, ExprLit, ExprPath,
+    Ident, Lit, Result, Token,
 };
 use syn_locator::{Locate, LocateGroup, Surround};
 
@@ -64,8 +64,8 @@ impl ToWgslString for CommaSepWgslExprs {
 impl Locate for CommaSepWgslExprs {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
@@ -127,8 +127,8 @@ impl ToWgslString for WgslExpr {
 impl Locate for WgslExpr {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
@@ -185,8 +185,8 @@ impl ToWgslString for WgslExprArray {
 impl Locate for WgslExprArray {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
@@ -247,8 +247,8 @@ impl ToWgslString for WgslExprBinary {
 impl Locate for WgslExprBinary {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
@@ -304,8 +304,8 @@ impl ToWgslString for WgslExprCall {
 impl Locate for WgslExprCall {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
@@ -353,8 +353,8 @@ impl ToWgslString for WgslExprLit {
 impl Locate for WgslExprLit {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
@@ -402,8 +402,8 @@ impl ToWgslString for WgslExprPath {
 impl Locate for WgslExprPath {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {

@@ -1,10 +1,10 @@
 use super::{data::LayoutExt, path::*, traits::*};
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{ToTokens, TokenStreamExt, quote};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
-    Error, Expr, Ident, LitInt, Path, Result, Token,
     parse::{Parse, ParseStream},
     spanned::Spanned,
+    Error, Expr, Ident, LitInt, Path, Result, Token,
 };
 
 #[derive(Debug, Clone)]

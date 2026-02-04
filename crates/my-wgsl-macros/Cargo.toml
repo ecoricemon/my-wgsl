@@ -1,8 +1,8 @@
 [package]
 name = "my-wgsl-macros"
-version = "0.1.4"
-edition = "2024"
-rust-version = "1.85"
+version = "0.1.5"
+edition = "2021"
+rust-version = "1.71.1"
 description = "A procedural macro for my-wgsl"
 repository = "https://github.com/ecoricemon/my-wgsl"
 license = "Apache-2.0 OR MIT"
@@ -13,7 +13,7 @@ proc-macro = true
 doctest = false
 
 [dependencies]
-my-wgsl-syn = { version = "0.1.0", path = "../my-wgsl-syn" }
+my-wgsl-syn = { workspace = true }
 syn = { workspace = true }
 proc-macro2 = { workspace = true }
 quote = { workspace = true }

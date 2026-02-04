@@ -1,8 +1,8 @@
 [package]
 name = "wgsl-builtin"
-version = "0.1.1"
-edition = "2024"
-rust-version = "1.85"
+version = "0.1.2"
+edition = "2021"
+rust-version = "1.71.1"
 description = "WGSL builtin types"
 repository = "https://github.com/ecoricemon/my-wgsl"
 license = "Apache-2.0 OR MIT"

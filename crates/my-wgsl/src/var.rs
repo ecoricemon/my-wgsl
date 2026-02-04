@@ -178,7 +178,7 @@ pub struct Storage<T, const G: usize, const B: usize, const RW: bool>(Var<T>);
 #[repr(transparent)]
 pub struct Var<T>(UnsafeCell<T>);
 
-// For usage as static variable.
+// TODO: Definitely unsafe
 unsafe impl<T> Send for Var<T> {}
 unsafe impl<T> Sync for Var<T> {}
 
@@ -203,10 +203,9 @@ impl<T> Var<T> {
     }
 
     unsafe fn field_ptr<V>(&self, offset: usize) -> *mut V {
-        let ptr = self.0.get().cast::<V>();
-        let ptr = unsafe { ptr.byte_add(offset) };
-        assert!(ptr.is_aligned());
-        ptr
+        let base_ptr = self.0.get().cast::<u8>();
+        let field_ptr = base_ptr.add(offset);
+        field_ptr.cast::<V>()
     }
 }
 

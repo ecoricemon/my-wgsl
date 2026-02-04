@@ -21,10 +21,14 @@ pub use wgsl_builtin::prelude::*;
 pub use const_format::concatcp;
 pub use const_str::to_str;
 pub use my_wgsl_macros::WgslCompatible;
-pub use my_wgsl_syn::compatible::{
-    HasWgslStructExInfo, NotWgslCompatible, TypeHelper, WgslCompatible, WgslFieldString, WgslKind,
-    WgslStructExInfo, check_storage_field, check_uniform_field, check_whole_struct,
-    panic_by_not_wgsl_compatible,
+pub use my_wgsl_syn::{
+    aligned_vec,
+    compatible::{
+        check_storage_field, check_uniform_field, check_whole_struct, panic_by_not_wgsl_compatible,
+        HasWgslStructExInfo, NotWgslCompatible, TypeHelper, WgslCompatible, WgslFieldString,
+        WgslKind, WgslStructExInfo,
+    },
+    memoffset,
 };
 
 /// WgslCompatible contains some checks that cause compile failures. We test them here.

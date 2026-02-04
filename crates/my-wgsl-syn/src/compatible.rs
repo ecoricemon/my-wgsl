@@ -1,9 +1,9 @@
 // TODO: Remove pre_field_off. We now have wgsl_offsets
 use super::traits::AttributeHelper;
-use core::mem::MaybeUninit;
+use core::mem::{self, MaybeUninit};
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{ToTokens, quote};
-use syn::{Error, Field, Index, ItemStruct, Result, spanned::Spanned};
+use quote::{quote, ToTokens};
+use syn::{spanned::Spanned, Error, Field, Index, ItemStruct, Result};
 
 // === WgslCompatible ===
 
@@ -13,13 +13,13 @@ pub trait WgslCompatible: Sized {
     /// WGSL ident of the type.
     ///
     /// e.g. "T" in struct T { .. }
-    const WGSL_IDENT: &str = "";
+    const WGSL_IDENT: &'static str = "";
 
     /// WGSL alignment in bytes of the type.
-    const WGSL_ALIGN: usize = align_of::<Self>();
+    const WGSL_ALIGN: usize = mem::align_of::<Self>();
 
     /// WGSL size in bytes of the type.
-    const WGSL_SIZE: usize = size_of::<Self>();
+    const WGSL_SIZE: usize = mem::size_of::<Self>();
 
     /// Kind of the type.
     const WGSL_KIND: WgslKind = WgslKind::Primitive;
@@ -29,7 +29,7 @@ pub trait WgslCompatible: Sized {
     /// Type definition code.
     ///
     /// e.g. "struct Vertex { pos: vec3f, color: vec3f }"
-    const WGSL_DEFINE: &str = "";
+    const WGSL_DEFINE: &'static str = "";
 
     /* --- Array attributes --- */
 
@@ -40,12 +40,12 @@ pub trait WgslCompatible: Sized {
 // MaybeUninit
 impl<T: WgslCompatible> WgslCompatible for MaybeUninit<T> {
     // Common attributes
-    const WGSL_IDENT: &str = T::WGSL_IDENT;
+    const WGSL_IDENT: &'static str = T::WGSL_IDENT;
     const WGSL_ALIGN: usize = T::WGSL_ALIGN;
     const WGSL_SIZE: usize = T::WGSL_SIZE;
     const WGSL_KIND: WgslKind = T::WGSL_KIND;
     // Type definition attributes
-    const WGSL_DEFINE: &str = T::WGSL_DEFINE;
+    const WGSL_DEFINE: &'static str = T::WGSL_DEFINE;
     // Array attributes
     const WGSL_ARRAY_LENGTH: usize = T::WGSL_ARRAY_LENGTH;
 }
@@ -53,9 +53,9 @@ impl<T: WgslCompatible> WgslCompatible for MaybeUninit<T> {
 // [T; N] -> Wgsl array
 impl<T: WgslCompatible, const N: usize> WgslCompatible for [T; N] {
     // Common attributes
-    const WGSL_IDENT: &str = T::WGSL_IDENT;
+    const WGSL_IDENT: &'static str = T::WGSL_IDENT;
     const WGSL_ALIGN: usize = T::WGSL_ALIGN;
-    const WGSL_SIZE: usize = const { N * round_up(T::WGSL_SIZE, T::WGSL_ALIGN) };
+    const WGSL_SIZE: usize = N * round_up(T::WGSL_SIZE, T::WGSL_ALIGN);
     const WGSL_KIND: WgslKind = WgslKind::Array;
     // Array attributes
     const WGSL_ARRAY_LENGTH: usize = N;
@@ -156,12 +156,12 @@ macro_rules! impl_wgsl_compatible {
     ($ty:ty, $wgsl_name:literal, $wgsl_align:expr, $wgsl_size:expr) => {
         impl WgslCompatible for $ty {
             // Common attributes
-            const WGSL_IDENT: &str = $wgsl_name;
+            const WGSL_IDENT: &'static str = $wgsl_name;
             const WGSL_ALIGN: usize = $wgsl_align;
             const WGSL_SIZE: usize = $wgsl_size;
             const WGSL_KIND: WgslKind = WgslKind::Primitive;
             // Type definition attributes
-            const WGSL_DEFINE: &str = "";
+            const WGSL_DEFINE: &'static str = "";
             // Array attributes
             const WGSL_ARRAY_LENGTH: usize = 0;
         }
@@ -228,7 +228,11 @@ impl<T> NotWgslCompatible for TypeHelper<T> {}
 // === Utility functions ===
 
 pub const fn max(a: usize, b: usize) -> usize {
-    if a > b { a } else { b }
+    if a > b {
+        a
+    } else {
+        b
+    }
 }
 
 /// * align - must be a power of 2
@@ -257,16 +261,21 @@ pub const fn panic_by_not_wgsl_compatible(not_wgsl_compatible_ty: &'static str) 
 }
 
 pub const fn check_storage_field<Field: WgslCompatible, const N: usize>(
-    rust_cur_off: &mut usize,
-    wgsl_cur_off: &mut usize,
-    wgsl_max_align: &mut usize,
-    wgsl_struct_ex_info: &mut WgslStructExInfo<N>,
+    mut rust_cur_off: usize,
+    mut wgsl_cur_off: usize,
+    mut wgsl_max_align: usize,
+    mut wgsl_struct_ex_info: WgslStructExInfo<N>,
     rust_field_off: usize,
     field_ident: &'static str,
     field_idx: usize,
+) -> (
+    usize,               /* rust_cur_off */
+    usize,               /* wgsl_cur_off */
+    usize,               /* wgsl_max_align */
+    WgslStructExInfo<N>, /* wgsl_struct_ex_info */
 ) {
     // ZST is not allowed.
-    if size_of::<Field>() == 0 {
+    if mem::size_of::<Field>() == 0 {
         panic!("Zero sized type is not allowed");
     }
 
@@ -275,15 +284,20 @@ pub const fn check_storage_field<Field: WgslCompatible, const N: usize>(
         if field_idx == 0 {
             panic!("the first field must be a non-padding");
         }
-        *rust_cur_off = rust_field_off + size_of::<Field>();
-        return;
+        rust_cur_off = rust_field_off + mem::size_of::<Field>();
+        return (
+            rust_cur_off,
+            wgsl_cur_off,
+            wgsl_max_align,
+            wgsl_struct_ex_info,
+        );
     }
 
-    let rust_field_align = align_of::<Field>();
-    let rust_field_size = size_of::<Field>();
+    let rust_field_align = mem::align_of::<Field>();
+    let rust_field_size = mem::size_of::<Field>();
     let wgsl_field_align = Field::WGSL_ALIGN;
     let wgsl_field_size = Field::WGSL_SIZE;
-    let mut wgsl_field_off = round_up(*wgsl_cur_off, wgsl_field_align);
+    let mut wgsl_field_off = round_up(wgsl_cur_off, wgsl_field_align);
 
     // If the field is array, then we need to check if each element is well laid out.
     if Field::WGSL_KIND.is_array() && Field::WGSL_ARRAY_LENGTH > 1 {
@@ -303,7 +317,7 @@ pub const fn check_storage_field<Field: WgslCompatible, const N: usize>(
     // Rust needs an explicit padding. Clients will see that via panic msg.
     if rust_field_off < wgsl_field_off {
         let dst = round_up2(wgsl_field_off, rust_field_align, wgsl_field_align);
-        let rust_need_pad = dst - *rust_cur_off;
+        let rust_need_pad = dst - rust_cur_off;
         const_panic::concat_panic!(
             rust_need_pad,
             " bytes explicit padding is required before ",
@@ -332,27 +346,41 @@ pub const fn check_storage_field<Field: WgslCompatible, const N: usize>(
     }
 
     // Updates the state for the field.
-    *rust_cur_off = rust_field_off + rust_field_size;
-    *wgsl_cur_off = wgsl_field_off + wgsl_field_size;
-    *wgsl_max_align = max(*wgsl_max_align, wgsl_field_align);
+    rust_cur_off = rust_field_off + rust_field_size;
+    wgsl_cur_off = wgsl_field_off + wgsl_field_size;
+    wgsl_max_align = max(wgsl_max_align, wgsl_field_align);
     wgsl_struct_ex_info.rust_aligns[field_idx] = rust_field_align;
     wgsl_struct_ex_info.wgsl_offsets[field_idx] = wgsl_field_off;
+
+    (
+        rust_cur_off,
+        wgsl_cur_off,
+        wgsl_max_align,
+        wgsl_struct_ex_info,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
 pub const fn check_uniform_field<Field: WgslCompatible, const N: usize>(
-    rust_cur_off: &mut usize,
-    wgsl_cur_off: &mut usize,
-    wgsl_max_align: &mut usize,
-    wgsl_struct_ex_info: &mut WgslStructExInfo<N>,
-    pre_field_off: &mut usize,
-    is_pre_field_struct: &mut bool,
+    mut rust_cur_off: usize,
+    mut wgsl_cur_off: usize,
+    mut wgsl_max_align: usize,
+    mut wgsl_struct_ex_info: WgslStructExInfo<N>,
+    mut pre_field_off: usize,
+    mut is_pre_field_struct: bool,
     rust_field_off: usize,
     field_ident: &'static str,
     field_idx: usize,
+) -> (
+    usize,               /* rust_cur_off */
+    usize,               /* wgsl_cur_off */
+    usize,               /* wgsl_max_align */
+    WgslStructExInfo<N>, /* wgsl_struct_ex_info */
+    usize,               /* pre_field_off */
+    bool,                /* is_pre_field_struct */
 ) {
     // ZST is not allowed.
-    if size_of::<Field>() == 0 {
+    if mem::size_of::<Field>() == 0 {
         panic!("Zero sized type is not allowed");
     }
 
@@ -361,19 +389,26 @@ pub const fn check_uniform_field<Field: WgslCompatible, const N: usize>(
         if field_idx == 0 {
             panic!("the first field must be a non-padding");
         }
-        *rust_cur_off = rust_field_off + size_of::<Field>();
-        return;
+        rust_cur_off = rust_field_off + mem::size_of::<Field>();
+        return (
+            rust_cur_off,
+            wgsl_cur_off,
+            wgsl_max_align,
+            wgsl_struct_ex_info,
+            pre_field_off,
+            is_pre_field_struct,
+        );
     }
 
-    let rust_field_align = align_of::<Field>();
-    let rust_field_size = size_of::<Field>();
+    let rust_field_align = mem::align_of::<Field>();
+    let rust_field_size = mem::size_of::<Field>();
     let wgsl_field_align = Field::WGSL_ALIGN;
     let wgsl_field_size = Field::WGSL_SIZE;
-    let mut wgsl_field_off = round_up(*wgsl_cur_off, required_wgsl_align_of::<Field>());
+    let mut wgsl_field_off = round_up(wgsl_cur_off, required_wgsl_align_of::<Field>());
 
     // Uniform address space requires that if the previous field was a struct type, then offset
     // difference must be a multiple of 16.
-    if *is_pre_field_struct {
+    if is_pre_field_struct {
         // If the difference is not a multiple of 16, we'll add @size to fill the gap.
         let prev = wgsl_struct_ex_info.nearest_non_padding_index(field_idx - 1);
         let diff = max(rust_field_off, wgsl_field_off) - wgsl_struct_ex_info.wgsl_offsets[prev];
@@ -399,7 +434,7 @@ pub const fn check_uniform_field<Field: WgslCompatible, const N: usize>(
     // Rust needs an explicit padding. Clients will see that via panic msg.
     if rust_field_off < wgsl_field_off {
         let dst = round_up2(wgsl_field_off, rust_field_align, wgsl_field_align);
-        let rust_need_pad = dst - *rust_cur_off;
+        let rust_need_pad = dst - rust_cur_off;
         const_panic::concat_panic!(
             rust_need_pad,
             " bytes explicit padding is required before ",
@@ -428,26 +463,35 @@ pub const fn check_uniform_field<Field: WgslCompatible, const N: usize>(
     }
 
     // Updates the state for the field.
-    *rust_cur_off = rust_field_off + rust_field_size;
-    *wgsl_cur_off = wgsl_field_off + wgsl_field_size;
-    *wgsl_max_align = max(*wgsl_max_align, wgsl_field_align);
+    rust_cur_off = rust_field_off + rust_field_size;
+    wgsl_cur_off = wgsl_field_off + wgsl_field_size;
+    wgsl_max_align = max(wgsl_max_align, wgsl_field_align);
     wgsl_struct_ex_info.rust_aligns[field_idx] = rust_field_align;
     wgsl_struct_ex_info.wgsl_offsets[field_idx] = wgsl_field_off;
 
     // Updates the other unifrom relative state.
-    *pre_field_off = wgsl_field_off;
-    *is_pre_field_struct = Field::WGSL_KIND.is_struct();
+    pre_field_off = wgsl_field_off;
+    is_pre_field_struct = Field::WGSL_KIND.is_struct();
+
+    (
+        rust_cur_off,
+        wgsl_cur_off,
+        wgsl_max_align,
+        wgsl_struct_ex_info,
+        pre_field_off,
+        is_pre_field_struct,
+    )
 }
 
 /// If WGSL align is insufficient -> @align(diff) on the first WGSL field
 /// If WGSL size is insufficient -> @size(diff) on the last WGSL field
 pub const fn check_whole_struct<Struct, const N: usize>(
-    wgsl_struct_ex_info: &mut WgslStructExInfo<N>,
+    mut wgsl_struct_ex_info: WgslStructExInfo<N>,
     wgsl_cur_off: usize,
     wgsl_max_align: usize,
-) {
+) -> WgslStructExInfo<N> /* wgsl_struct_ex_info */ {
     /* --- WHOLE ALIGN CHECK --- */
-    let rust_whole_align = align_of::<Struct>();
+    let rust_whole_align = mem::align_of::<Struct>();
     let wgsl_whole_align = max(wgsl_max_align, 1);
 
     // Panics if Rust align is smaller than WGSL align. Clients need to resolve that.
@@ -485,7 +529,7 @@ pub const fn check_whole_struct<Struct, const N: usize>(
     }
 
     /* --- WHOLE SIZE CHECK --- */
-    let rust_whole_size = size_of::<Struct>();
+    let rust_whole_size = mem::size_of::<Struct>();
     let wgsl_whole_size = round_up(wgsl_cur_off, wgsl_whole_align);
 
     // Panics if Rust size is smaller than WGSL size. Clients need to resolve that.
@@ -503,6 +547,8 @@ pub const fn check_whole_struct<Struct, const N: usize>(
         let diff = rust_whole_size - wgsl_struct_ex_info.wgsl_offsets[i];
         wgsl_struct_ex_info.wgsl_need_sizes[i] = diff;
     }
+
+    wgsl_struct_ex_info
 }
 
 pub struct WgslFieldString {
@@ -623,9 +669,9 @@ impl<'a> WgslCompatibleTokenGenerator<'a> {
             }
 
             impl my_wgsl::WgslCompatible for #struct_ident {
-                const WGSL_IDENT: &str = stringify!(#struct_ident);
+                const WGSL_IDENT: &'static str = stringify!(#struct_ident);
                 const WGSL_KIND: my_wgsl::WgslKind = my_wgsl::WgslKind::Struct;
-                const WGSL_DEFINE: &str = #define_wgsl_struct;
+                const WGSL_DEFINE: &'static str = #define_wgsl_struct;
             }
         }
     }
@@ -639,9 +685,8 @@ impl<'a> WgslCompatibleTokenGenerator<'a> {
             }
         });
 
-        quote! { const _: () = const {
+        quote! { const _: () = {
             use my_wgsl::NotWgslCompatible;
-
             #(#check_field_trait_impl)*
         }; }
     }
@@ -657,14 +702,14 @@ impl<'a> WgslCompatibleTokenGenerator<'a> {
             self.check_storage_field_offset_tokens()
         };
 
-        quote! { const {
+        quote! {{
             // Checks if every field offset is valid.
             #decl_vars
             #check_field_offset
 
             // Checks the whole alignment & size of the struct.
-            my_wgsl::check_whole_struct::<#struct_ident, #num_fields>(
-                &mut wgsl_struct_ex_info, wgsl_cur_off, wgsl_max_align
+            wgsl_struct_ex_info = my_wgsl::check_whole_struct::<#struct_ident, #num_fields>(
+                wgsl_struct_ex_info, wgsl_cur_off, wgsl_max_align
             );
 
             wgsl_struct_ex_info
@@ -703,12 +748,17 @@ impl<'a> WgslCompatibleTokenGenerator<'a> {
 
             // Checks the offset of the field.
             quote! {
-                my_wgsl::check_storage_field::<#field_ty, #num_fields>(
-                    &mut rust_cur_off,
-                    &mut wgsl_cur_off,
-                    &mut wgsl_max_align,
-                    &mut wgsl_struct_ex_info,
-                    /* rust_field_off: usize */ core::mem::offset_of!(#struct_ident, #field_ident),
+                (
+                    rust_cur_off,
+                    wgsl_cur_off,
+                    wgsl_max_align,
+                    wgsl_struct_ex_info,
+                ) = my_wgsl::check_storage_field::<#field_ty, #num_fields>(
+                    rust_cur_off,
+                    wgsl_cur_off,
+                    wgsl_max_align,
+                    wgsl_struct_ex_info,
+                    /* rust_field_off: usize */ my_wgsl::memoffset::offset_of!(#struct_ident, #field_ident),
                     /* field_ident: &'static str */ stringify!(#field_ident),
                     /* field_idx: usize */ #field_idx,
                 );
@@ -734,14 +784,21 @@ impl<'a> WgslCompatibleTokenGenerator<'a> {
 
             // Checks the offset of the field.
             quote! {
-                my_wgsl::check_uniform_field::<#field_ty, #num_fields>(
-                    &mut rust_cur_off,
-                    &mut wgsl_cur_off,
-                    &mut wgsl_max_align,
-                    &mut wgsl_struct_ex_info,
-                    &mut pre_field_off,
-                    &mut is_pre_field_struct,
-                    /* rust_field_off: usize */ core::mem::offset_of!(#struct_ident, #field_ident),
+                (
+                    rust_cur_off,
+                    wgsl_cur_off,
+                    wgsl_max_align,
+                    wgsl_struct_ex_info,
+                    pre_field_off,
+                    is_pre_field_struct,
+                ) = my_wgsl::check_uniform_field::<#field_ty, #num_fields>(
+                    rust_cur_off,
+                    wgsl_cur_off,
+                    wgsl_max_align,
+                    wgsl_struct_ex_info,
+                    pre_field_off,
+                    is_pre_field_struct,
+                    /* rust_field_off: usize */ my_wgsl::memoffset::offset_of!(#struct_ident, #field_ident),
                     /* field_ident: &'static str */ stringify!(#field_ident),
                     /* field_idx: usize */ #field_idx,
                 );
@@ -819,7 +876,7 @@ impl<'a> WgslCompatibleTokenGenerator<'a> {
             }
         });
 
-        quote! { const {
+        quote! {{
             #decl_field_strs
 
             my_wgsl::concatcp!(

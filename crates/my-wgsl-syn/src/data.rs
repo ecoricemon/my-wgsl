@@ -1,11 +1,10 @@
 use super::{
-    PAD_PREFIX,
     attr::WgslAttributes,
     traits::{RuntimeWgslToken, ToWgslString},
-    util,
+    util, PAD_PREFIX,
 };
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{ToTokens, TokenStreamExt, quote};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{Ident, Token, Type, Visibility};
 use syn_locator::{Locate, LocateGroup};
 
@@ -84,8 +83,8 @@ impl RuntimeWgslToken for WgslField {
 impl Locate for WgslField {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
@@ -123,7 +122,7 @@ impl LayoutExt {
         }
     }
 
-    pub(crate) const fn to_array_layout(self, len: usize) -> Self {
+    pub(crate) fn to_array_layout(self, len: usize) -> Self {
         debug_assert!(self.is_sized);
 
         unsafe { Self::new(self.size * len, self.align, self.is_sized).unwrap_unchecked() }
