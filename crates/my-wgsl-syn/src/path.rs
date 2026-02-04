@@ -1,6 +1,6 @@
 use super::util::*;
 use std::{borrow::Cow, cell::RefCell};
-use syn::{PathSegment, Token, punctuated::Punctuated};
+use syn::{punctuated::Punctuated, PathSegment, Token};
 use wgsl_builtin::{helper::*, prelude::*};
 
 pub(crate) fn path_segments_to_string(segments: &Punctuated<PathSegment, Token![::]>) -> String {
@@ -88,7 +88,8 @@ thread_local! {
 }
 
 pub(crate) fn to_wgsl_path<'o>(input: &str) -> Option<&'o str> {
-    PATH_NAMES.with_borrow(|root| {
+    PATH_NAMES.with(|root| {
+        let root = root.borrow();
         root.get(input).map(|cow| match cow {
             Cow::Owned(s) => {
                 let x = s.as_str() as *const str;
@@ -104,7 +105,8 @@ where
     T: Into<Cow<'static, str>>,
 {
     let s = s.into();
-    PATH_NAMES.with_borrow_mut(|root| {
+    PATH_NAMES.with(|root| {
+        let mut root = root.borrow_mut();
         root.push(s);
     });
 }

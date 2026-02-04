@@ -1,4 +1,4 @@
-//! # Conversion rules
+//! # Conversion rules (TBD)
 //!
 //! | Scope | Rust                        | WGSL                     |
 //! | :-:   | :-:                         | :-:                      |
@@ -14,7 +14,6 @@
 //! | mod   | static Storage<T, G, B, RW> | var<storage, read_write> |
 //!
 use super::{
-    ATTR_HIDE, ATTR_UNIFORM, EXTERN_CONST, EXTERN_TYPE, PAD_PREFIX,
     attr::{WgslAttribute, WgslAttributes},
     data::{LayoutExt, WgslField},
     expr::WgslExpr,
@@ -24,10 +23,10 @@ use super::{
         AsIdent, AttributeHelper, Evaluate, FromSyn, GetAttributeValue, IsAbstractType,
         RuntimeWgslToken, ToUppercase, ToWgslString,
     },
-    util,
+    util, ATTR_HIDE, ATTR_UNIFORM, EXTERN_CONST, EXTERN_TYPE, PAD_PREFIX,
 };
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{ToTokens, TokenStreamExt, format_ident, quote};
+use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use std::{
     cell::RefCell,
     collections::{BTreeMap, HashMap},
@@ -35,12 +34,13 @@ use std::{
     slice,
 };
 use syn::{
-    Attribute, Error, Expr, Field, Fields, Ident, Index, Item, ItemConst, ItemStruct, Result,
-    Token, Type, TypePath, Visibility, braced,
+    braced,
     parse::{Parse, ParseStream},
-    parse_quote, parse2,
+    parse2, parse_quote,
     spanned::Spanned,
     token::Brace,
+    Attribute, Error, Expr, Field, Fields, Ident, Index, Item, ItemConst, ItemStruct, Result,
+    Token, Type, TypePath, Visibility,
 };
 use syn_locator::{Locate, LocateGroup, Surround};
 use wgsl_builtin::{
@@ -360,8 +360,8 @@ impl FromSyn<Vec<Item>> for WgslItems {
 impl Locate for WgslItems {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
@@ -391,8 +391,8 @@ impl ToTokens for WgslItem {
 impl Locate for WgslItem {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
@@ -516,8 +516,8 @@ impl RuntimeWgslToken for WgslItemConst {
 impl Locate for WgslItemConst {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
@@ -648,8 +648,8 @@ impl RuntimeWgslToken for WgslItemMod {
 impl Locate for WgslItemMod {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
@@ -1127,6 +1127,13 @@ impl WgslItemStruct {
             quote! { #ident: #ty }
         });
 
+        let whole_align = fields
+            .clone()
+            .map(|field| field.wgsl_layout.align)
+            .max()
+            .unwrap_or(1);
+        let whole_align = Index::from(whole_align);
+
         let writes = fields.take(cnt).map(|f| {
             let ident = &f.ident;
             let offset = format_ident!("OFFSET_{}", ident.to_uppercase());
@@ -1137,7 +1144,13 @@ impl WgslItemStruct {
 
         quote! {
             fn new( #(#params),* ) -> Self {
-                let mut inner = #inner_ident(vec![0; #inner_ident::OFFSET_LAST]);
+                use my_wgsl::aligned_vec::{AVec, ConstAlign};
+
+                let v: AVec<u8, ConstAlign<#whole_align>> = AVec::from_iter(
+                    #whole_align,
+                    core::iter::repeat(0).take(#inner_ident::OFFSET_LAST)
+                );
+                let mut inner = #inner_ident(v);
                 #(#writes)*
                 Self(inner)
             }
@@ -1148,6 +1161,13 @@ impl WgslItemStruct {
     where
         I: Iterator<Item = &'a WgslField> + Clone,
     {
+        let whole_align = fields
+            .clone()
+            .map(|field| field.wgsl_layout.align)
+            .max()
+            .unwrap_or(1);
+        let whole_align = Index::from(whole_align);
+
         let decl_const = Self::decl_unsized_inner_const(fields.clone());
         let decl_drop = Self::decl_unsized_inner_drop(ident, fields.clone());
 
@@ -1158,7 +1178,9 @@ impl WgslItemStruct {
 
         quote! {
             #[repr(transparent)]
-            #vis struct #ident(Vec<u8>);
+            #vis struct #ident(
+                my_wgsl::aligned_vec::AVec<u8, my_wgsl::aligned_vec::ConstAlign<#whole_align>>
+            );
 
             impl #ident {
                 #decl_const
@@ -1177,7 +1199,7 @@ impl WgslItemStruct {
                         let mut p: *const #last_elem_type =
                             self.0.as_ptr().add(cur_len - Self::STRIDE_LAST).cast();
                         while p >= e {
-                            drop(std::ptr::read(p));
+                            let _ = std::ptr::read(p); // drop
                             p = p.sub(1);
                         }
                         self.0.set_len(new_len);
@@ -1543,8 +1565,8 @@ impl RuntimeWgslToken for WgslItemStruct {
 impl Locate for WgslItemStruct {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
@@ -1577,8 +1599,12 @@ impl Memo {
             ($ty:ident) => {{
                 let key = parse_quote!($ty);
 
-                let rust_layout =
-                    LayoutExt::new(size_of::<$ty>(), align_of::<$ty>(), IS_SIZED).unwrap();
+                let rust_layout = LayoutExt::new(
+                    std::mem::size_of::<$ty>(),
+                    std::mem::align_of::<$ty>(),
+                    IS_SIZED,
+                )
+                .unwrap();
                 let wgsl_layout =
                     LayoutExt::new($ty::wgsl_size(), $ty::wgsl_align(), IS_SIZED).unwrap();
 

@@ -384,13 +384,13 @@ fn assert_code_eq(mut r: String, c: &str, e: &str) {
 /// Tests `my_wgsl::WgslCompatible` on a real GPU. But if any GPUs are not available, tests are
 /// just skipped.
 #[cfg(test)]
-#[cfg(target_endian = "little")]
+#[cfg(all(target_endian = "little", not(miri)))]
 #[rustfmt::skip]
 mod test_wgsl_compatible_on_gpu {
     use futures_lite::future;
     use my_wgsl::{WgslCompatible, WideVec3i};
     use std::{
-        sync::{Mutex, mpsc::{self, Sender}},
+        sync::{Arc, mpsc::{self, Sender}},
         fmt::Debug,
         slice,
         thread,
@@ -413,7 +413,7 @@ mod test_wgsl_compatible_on_gpu {
             a2: [WideVec3i; 2],
         }
 
-        let data = A { 
+        let data = A {
             a0: 1,
             a1: [2, 3],
             pad: [0; _],
@@ -427,10 +427,8 @@ mod test_wgsl_compatible_on_gpu {
         // a1: [2, 3]
         assert_eq!(&contents[4..12], &[2, 0, 0, 0, 3, 0, 0, 0]);
         // a2: [WideVec3i::splat(4), WideVec3i::splat(5)],
-        assert_eq!(&contents[16..48], &[
-            4, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0,
-            5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0,
-        ]);
+        assert_eq!(&contents[16..28], &[4, 0, 0, 0, 4, 0, 0, 0, 4, 0, 0, 0]);
+        assert_eq!(&contents[32..44], &[5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0]);
 
         try_storage_on_another_thread(Some(A::WGSL_DEFINE), "A", data).unwrap();
     }
@@ -521,10 +519,12 @@ mod test_wgsl_compatible_on_gpu {
             backends: wgpu::Backends::default(),
             ..Default::default()
         });
+
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions::default())
             .await
             .map_err(|e| e.to_string())?;
+
         adapter
             .request_device(&wgpu::DeviceDescriptor::default())
             .await
@@ -609,8 +609,6 @@ mod test_wgsl_compatible_on_gpu {
         data: T,
         tx: Sender<Result<(), String>>,
     ) {
-        static READ_BUFFER: Mutex<Option<wgpu::Buffer>> = Mutex::new(None);
-
         // Creates a `wgpu::Buffer` for copying the data on the gpu.
         let echo_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Echo buffer"),
@@ -626,10 +624,6 @@ mod test_wgsl_compatible_on_gpu {
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-
-        let mut guard = READ_BUFFER.lock().unwrap();
-        *guard = Some(read_buffer.clone());
-        drop(guard);
 
         // Creates a `wgpu::ShaderModule`.
         let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -672,37 +666,37 @@ mod test_wgsl_compatible_on_gpu {
             timestamp_writes: None,
         });
         compute_pass.set_pipeline(&compute_pipeline);
-        compute_pass.set_bind_group(0, Some(&bind_group), &[]);
+        compute_pass.set_bind_group(0, &bind_group, &[]);
         compute_pass.dispatch_workgroups(1, 1, 1);
         drop(compute_pass);
 
         // Copies the computation result.
-        encoder.copy_buffer_to_buffer(&echo_buffer, 0, &read_buffer, 0, None);
+        encoder.copy_buffer_to_buffer(&echo_buffer, 0, &read_buffer, 0, echo_buffer.size());
 
         // Submits the command to the queue.
         queue.submit(std::iter::once(encoder.finish()));
 
         // Tests if the read buffer contains the data we put in.
-        read_buffer.map_async(wgpu::MapMode::Read, .., move |result| {
+        let read_buffer = Arc::new(read_buffer);
+        let c_read_buffer = read_buffer.clone();
+        read_buffer.slice(..).map_async(wgpu::MapMode::Read, move |result| {
             assert!(result.is_ok());
 
-            let guard = READ_BUFFER.lock().unwrap();
-            let buf = guard.as_ref().unwrap();
-
-            let bytes = &buf.get_mapped_range(..)[..];
+            let bytes = c_read_buffer.slice(..).get_mapped_range();
             let ptr = bytes.as_ptr();
             let read = unsafe { (ptr as *const T).as_ref().unwrap() };
 
-            let result = if read == &data {
-                Ok(())
+            if read == &data {
+                tx.send(Ok(())).unwrap();
             } else {
-                Err(format!(
+                let msg = format!(
                     "read data is not equal: src: {data:?}, dst: {read:?}"
-                ))
+                );
+                tx.send(Err(msg)).unwrap();
             };
-            drop(guard);
 
-            tx.send(result).unwrap();
+            drop(bytes);
+            c_read_buffer.unmap();
         });
     }
 }

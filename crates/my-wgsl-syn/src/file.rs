@@ -2,8 +2,8 @@ use super::{attr::WgslAttributes, item::WgslItems, traits::FromSyn};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, TokenStreamExt};
 use syn::{
-    Item, Result,
     parse::{Parse, ParseStream},
+    Item, Result,
 };
 use syn_locator::{Locate, LocateGroup};
 
@@ -32,8 +32,8 @@ impl Parse for WgslFile {
 impl Locate for WgslFile {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {

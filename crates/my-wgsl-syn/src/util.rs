@@ -1,5 +1,5 @@
 use std::{fmt::Display, str::FromStr};
-use syn::{Error, Expr, Ident, Lit, Path, Result, Type, spanned::Spanned};
+use syn::{spanned::Spanned, Error, Expr, Ident, Lit, Path, Result, Type};
 
 /// * align - must be a power of 2
 pub(crate) const fn round_up(value: usize, align: usize) -> usize {

@@ -22,3 +22,7 @@ pub(crate) const EXTERN_CONST: &str = "extern_const";
 
 /// Ident prefix for Rust padding fields.
 pub(crate) const PAD_PREFIX: &str = "__pad";
+
+/// Re-exports
+pub use aligned_vec;
+pub use memoffset;

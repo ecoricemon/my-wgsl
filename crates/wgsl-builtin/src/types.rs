@@ -937,4 +937,20 @@ mod tests {
         let v = Vec2f::new(1., 2.);
         assert_eq!(m * v, Vec3f::new(9., 12., 15.));
     }
+
+    #[test]
+    fn test_conversion_from_array_to_mat() {
+        // 2x2
+        let arr = [1., 2., 3., 4.];
+        let m = Mat2x2f::from(arr);
+        assert_eq!(m, Mat2x2f::new(Vec2f::new(1., 2.), Vec2f::new(3., 4.)));
+
+        // 2x3
+        let arr = [1., 2., 3., 4., 5., 6.];
+        let m = Mat2x3f::from(arr);
+        assert_eq!(
+            m,
+            Mat2x3f::new(Vec3f::new(1., 2., 3.), Vec3f::new(4., 5., 6.))
+        );
+    }
 }

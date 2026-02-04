@@ -1,8 +1,8 @@
 [package]
 name = "my-wgsl"
-version = "0.1.4"
-edition = "2024"
-rust-version = "1.85"
+version = "0.1.5"
+edition = "2021"
+rust-version = "1.71.1"
 description = "A WGSL compatibility check library"
 documentation = "https://docs.rs/my-wgsl"
 readme = "README.md" 
@@ -14,17 +14,17 @@ keywords = ["wgsl"]
 crate-type = ["rlib"]
 
 [dependencies]
-my-wgsl-macros = { version = "0.1.4", path = "../my-wgsl-macros" }
-my-wgsl-syn = { version = "0.1.0", path = "../my-wgsl-syn" }
-wgsl-builtin = { version = "0.1.1", path = "../wgsl-builtin" }
+my-wgsl-macros = { workspace = true }
+my-wgsl-syn = { workspace = true }
+wgsl-builtin = { workspace = true }
 const_format = { workspace = true }
 const-str = { workspace = true }
 paste = { workspace = true }
 
-[dev-dependencies] 
-pretty_assertions = { version = "1.4.1" }
-wgpu = { version = "27.0.1" }
-futures-lite = { version = "2.6.1" }
+[dev-dependencies]
+pretty_assertions = "1.4.1"
+wgpu = { version = "26.0.1", default-features = false, features = ["dx12", "metal", "vulkan", "wgsl"] }
+futures-lite = "2.6.1"
 
 [[example]]
 name = "var"

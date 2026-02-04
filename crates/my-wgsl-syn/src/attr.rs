@@ -1,11 +1,12 @@
 use super::{expr::*, traits::*};
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{ToTokens, quote};
+use quote::{quote, ToTokens};
 use std::ops::{Deref, DerefMut};
 use syn::{
-    AttrStyle, Attribute, Expr, Meta, Result, Token, bracketed,
+    bracketed,
     parse::{Parse, ParseStream},
     token::Bracket,
+    AttrStyle, Attribute, Expr, Meta, Result, Token,
 };
 use syn_locator::{Locate, LocateGroup, Surround};
 
@@ -97,8 +98,8 @@ impl ToWgslString for WgslAttributes {
 impl Locate for WgslAttributes {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
@@ -240,8 +241,8 @@ impl RuntimeWgslToken for WgslAttribute {
 impl Locate for WgslAttribute {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
@@ -275,9 +276,9 @@ pub enum WgslMeta {
 }
 
 impl WgslMeta {
-    const IF: &str = "if";
-    const ELSE_IF: &str = "else if";
-    const ELSE: &str = "else";
+    const IF: &'static str = "if";
+    const ELSE_IF: &'static str = "else if";
+    const ELSE: &'static str = "else";
 
     pub(crate) fn is_branch(&self) -> bool {
         matches!(
@@ -384,8 +385,8 @@ impl RuntimeWgslToken for WgslMeta {
 impl Locate for WgslMeta {
     fn find_loc(
         &self,
-        locator: &mut syn_locator::LocatorGuard,
-        file_path: &'static str,
+        locator: &mut syn_locator::Locator,
+        file_path: syn_locator::FilePath,
         code: &str,
         offset: usize,
     ) -> syn_locator::Location {
